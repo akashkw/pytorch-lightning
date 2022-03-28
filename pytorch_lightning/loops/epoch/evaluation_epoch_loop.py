@@ -14,7 +14,7 @@
 
 from collections import OrderedDict
 from functools import lru_cache
-from typing import Any, Dict, Optional
+from typing import Any, Callable, Dict, Optional
 
 from deprecate import void
 from torch.utils.data import DataLoader
@@ -94,14 +94,20 @@ class EvaluationEpochLoop(Loop):
         else:
             suffix = f"val_dataloader{dataloader_idx}_next"
 
-        def _on_before_fetch() -> None:
+        data_fetcher._start_profiler = self._on_before_fetch(suffix)
+        data_fetcher._stop_profiler = self._on_after_fetch(suffix)
+
+    def _on_before_fetch(self, suffix: str) -> Callable[[], None]:
+        def start_profiler() -> None:
             self.trainer.profiler.start(f"[{self.__class__.__name__}].{suffix}")
 
-        def _on_after_fetch() -> None:
+        return start_profiler
+
+    def _on_after_fetch(self, suffix: str) -> Callable[[], None]:
+        def stop_profiler() -> None:
             self.trainer.profiler.stop(f"[{self.__class__.__name__}].{suffix}")
 
-        data_fetcher._start_profiler = _on_before_fetch
-        data_fetcher._stop_profiler = _on_after_fetch
+        return stop_profiler
 
     def advance(  # type: ignore[override]
         self,
